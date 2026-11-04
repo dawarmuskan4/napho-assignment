@@ -1,0 +1,120 @@
+<mxfile host="65bd71144e">
+    <diagram id="arch" name="1. Architecture">
+        <mxGraphModel dx="331" dy="434" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="600" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="fe" value="&lt;font color=&quot;#301c1c&quot;&gt;&lt;b&gt;Frontend: Next.js&lt;/b&gt;&lt;br&gt;&lt;br&gt;User switcher (mock login)&lt;br&gt;Employee: my claims, claim form, history&lt;br&gt;Approver: review queue, reviewed list,&lt;br&gt;approve / partial / reject / pay&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="260" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="be" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;Backend: FastAPI&lt;/b&gt;&lt;br&gt;&lt;br&gt;routers/claims.py: HTTP only&lt;br&gt;services.py: business rules, transitions&lt;br&gt;state_machine.py: (status, action) lookup table&lt;br&gt;auth.py: X-User-Id header → user + role&lt;br&gt;schemas.py: Pydantic validation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="60" width="300" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="db" value="&lt;font color=&quot;#1a1a1a&quot;&gt;&lt;b&gt;SQLite&lt;/b&gt;&lt;br&gt;users&lt;br&gt;claims&lt;br&gt;claim_events&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="90" width="170" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="tests" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;pytest + TestClient&lt;/b&gt;&lt;br&gt;fresh temp SQLite per test&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="310" width="300" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="REST + JSON&lt;br&gt;X-User-Id header" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" source="fe" target="be" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="SQLAlchemy&lt;br&gt;conditional UPDATE" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" source="be" target="db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" value="calls API" style="endArrow=classic;html=1;rounded=0;dashed=1;" parent="1" source="tests" target="be" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="states" name="2. Claim lifecycle">
+        <mxGraphModel dx="697" dy="521" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="600" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="start" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="175" width="30" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="draft" value="&lt;b&gt;DRAFT&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="160" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="sub" value="&lt;b&gt;&lt;font color=&quot;#000000&quot;&gt;SUBMITTED&lt;/font&gt;&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="160" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="appr" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;APPROVED&lt;/b&gt;&lt;br&gt;(full or partial)&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="60" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="rej" value="&lt;b&gt;&lt;font color=&quot;#000000&quot;&gt;REJECTED&lt;/font&gt;&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="260" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="paid" value="&lt;b&gt;&lt;font color=&quot;#000000&quot;&gt;PAID&lt;/font&gt;&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="940" y="65" width="130" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="draftnote" value="edit (owner)&lt;br&gt;delete (owner, never-submitted only)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="100" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="t0" value="create (employee)" style="endArrow=classic;html=1;rounded=0;fontSize=11;" parent="1" source="start" target="draft" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="t1" value="submit (owner)" style="endArrow=classic;html=1;rounded=0;fontSize=11;" parent="1" source="draft" target="sub" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="t2" value="approve (approver)&lt;br&gt;0 &amp;lt; approved ≤ claimed&lt;br&gt;comment required if partial" style="endArrow=classic;html=1;rounded=0;fontSize=11;" parent="1" source="sub" target="appr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="t3" value="reject (approver)&lt;br&gt;comment required" style="endArrow=classic;html=1;rounded=0;fontSize=11;" parent="1" source="sub" target="rej" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="t4" value="pay (approver)" style="endArrow=classic;html=1;rounded=0;fontSize=11;" parent="1" source="appr" target="paid" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="t5" value="edit (owner) → reopened as draft, then resubmit" style="endArrow=classic;html=1;rounded=0;fontSize=11;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="rej" target="draft" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="755" y="380"/>
+                            <mxPoint x="190" y="380"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rule" value="&lt;font color=&quot;#1a1a1a&quot;&gt;&lt;b&gt;Rules&lt;/b&gt;&lt;br&gt;• Any (status, action) pair not in the table → 409 Conflict&lt;br&gt;• Every change: UPDATE claims SET status=?, version=version+1 WHERE id=? AND status=? AND version=?&lt;br&gt;• 0 rows updated → 409 (stale page, double click, or another approver got there first)&lt;br&gt;• Every change writes one claim_events row in the same transaction&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="420" width="760" height="100" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="er" name="3. Data model">
+        <mxGraphModel dx="697" dy="521" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="600" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="users" value="&lt;b&gt;&lt;font color=&quot;#000000&quot;&gt;users&lt;/font&gt;&lt;/b&gt;&lt;hr&gt;&lt;font color=&quot;#000000&quot;&gt;id PK&lt;br&gt;name&lt;br&gt;role: employee | approver&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="210" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="claims" value="&lt;b&gt;&lt;font color=&quot;#000000&quot;&gt;claims&lt;/font&gt;&lt;/b&gt;&lt;hr&gt;&lt;font color=&quot;#000000&quot;&gt;id PK&lt;br&gt;employee_id FK → users&lt;br&gt;title (required)&lt;br&gt;category: travel | food | lodging | supplies | other&lt;br&gt;description&lt;br&gt;expense_date (not in future)&lt;br&gt;amount_paise INT (&amp;gt; 0, ≤ cap)&lt;br&gt;approved_amount_paise INT NULL&lt;br&gt;status&lt;br&gt;version INT (optimistic lock)&lt;br&gt;created_at, updated_at&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="40" width="300" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="events" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;claim_events&lt;/b&gt; (append-only)&lt;/font&gt;&lt;hr&gt;&lt;font color=&quot;#000000&quot;&gt;id PK&lt;br&gt;claim_id FK → claims&lt;br&gt;actor_id FK → users&lt;br&gt;action: created | updated | submitted |&lt;br&gt;  approved | rejected | reopened | paid&lt;br&gt;from_status, to_status&lt;br&gt;amount_paise (snapshot)&lt;br&gt;approved_amount_paise&lt;br&gt;comment&lt;br&gt;created_at&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="740" y="40" width="290" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" value="1 : N (owns)" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;endFill=0;startFill=0;" parent="1" source="users" target="claims" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" value="1 : N (history)" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;endFill=0;startFill=0;" parent="1" source="claims" target="events" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r3" value="1 : N (actor)" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;endFill=0;startFill=0;edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="users" target="events" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="145" y="350"/>
+                            <mxPoint x="885" y="350"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="why" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;Why&lt;/b&gt;&lt;br&gt;• Money as integer paise: no float rounding (0.1 + 0.2 problem)&lt;br&gt;• Partial approval = approved_amount_paise &amp;lt; amount_paise; status stays APPROVED&lt;br&gt;• Current state lives on claims (fast reads); full history in claim_events (audit)&lt;br&gt;• version column makes concurrent and duplicate actions safe&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="390" width="620" height="90" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
