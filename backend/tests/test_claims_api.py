@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 import pytest
@@ -247,3 +248,26 @@ def test_response_has_names_and_utc_timestamps(client):
     assert "claim_id" not in last
     assert claim["created_at"].endswith("Z") or claim["created_at"].endswith("+00:00")
     assert last["created_at"].endswith("Z") or last["created_at"].endswith("+00:00")
+
+
+# ---------- real concurrency (threads, not one request after another) ----------
+
+
+def test_parallel_double_submit_creates_one_submitted_event(client):
+    claim = new_claim(client)
+    with ThreadPoolExecutor(8) as pool:
+        codes = list(pool.map(lambda _: act(client, claim, "submit", ASHA).status_code, range(8)))
+    assert sorted(codes) == [200] + [409] * 7
+    events = client.get(f"/claims/{claim['id']}", headers=h(ASHA)).json()["events"]
+    assert actions({"events": events}) == ["created", "submitted"]
+
+
+def test_parallel_approve_and_reject_exactly_one_wins(client):
+    claim = submitted_claim(client)
+    with ThreadPoolExecutor(2) as pool:
+        approve = pool.submit(act, client, claim, "approve", MEERA)
+        reject = pool.submit(act, client, claim, "reject", VIKRAM, comment="No")
+    assert sorted([approve.result().status_code, reject.result().status_code]) == [200, 409]
+    final = client.get(f"/claims/{claim['id']}", headers=h(MEERA)).json()
+    assert len(final["events"]) == 3  # created, submitted, and exactly one decision
+    assert final["status"] == final["events"][-1]["to_status"]

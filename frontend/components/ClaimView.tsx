@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import StatusBadge from "@/components/StatusBadge";
 import {
   api,
@@ -44,6 +44,7 @@ export default function ClaimView() {
   const [claim, setClaim] = useState<ClaimDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // state is too slow to block two clicks in the same tick
   const [approvedRupees, setApprovedRupees] = useState("");
   const [comment, setComment] = useState("");
 
@@ -71,6 +72,8 @@ export default function ClaimView() {
   // On 409/404 the claim changed under us: reload it so the buttons match reality. Then show the message.
   // Other errors (e.g. 422) keep what the user typed.
   async function run(fn: () => Promise<ClaimDetail | void>, after?: () => void) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -86,6 +89,7 @@ export default function ClaimView() {
       if (e instanceof ApiError && (e.status === 409 || e.status === 404)) await load();
       setError(message);
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }

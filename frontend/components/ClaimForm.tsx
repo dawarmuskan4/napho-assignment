@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   api,
   CATEGORIES,
@@ -22,9 +22,11 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
   const [amount, setAmount] = useState(claim ? paiseToRupees(claim.amount_paise) : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // state is too slow to block two clicks in the same tick
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (inFlight.current) return;
     const paise = rupeesToPaise(amount);
     if (!(paise > 0)) {
       setError("Enter an amount greater than 0");
@@ -37,6 +39,7 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
       expense_date: expenseDate,
       amount_paise: paise,
     };
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -46,6 +49,7 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
       router.push(`/claims/${saved.id}`);
     } catch (err) {
       setError(errorMessage(err));
+      inFlight.current = false;
       setBusy(false);
     }
   }

@@ -38,9 +38,12 @@ export type Claim = {
 
 export type ClaimDetail = Claim & { events: ClaimEvent[] };
 
-// ---- selected user (mock auth), kept in localStorage ----
+// ---- selected user (mock auth) ----
+// The acting user lives in memory, per tab, so two tabs can act as two different people.
+// localStorage only remembers the last choice so a new tab or a reload starts as that user.
 
 const USER_KEY = "userId";
+let currentUserId: string | null = null;
 
 export function getStoredUserId(): string | null {
   try {
@@ -51,6 +54,7 @@ export function getStoredUserId(): string | null {
 }
 
 export function storeUserId(id: number) {
+  currentUserId = String(id);
   try {
     localStorage.setItem(USER_KEY, String(id));
   } catch {}
@@ -83,8 +87,7 @@ export function errorMessage(e: unknown): string {
 
 export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  const userId = getStoredUserId();
-  if (userId) headers["X-User-Id"] = userId;
+  if (currentUserId) headers["X-User-Id"] = currentUserId;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
   let res: Response;
