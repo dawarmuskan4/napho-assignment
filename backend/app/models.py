@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime, timezone
 
 from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -52,9 +52,14 @@ class Claim(Base):
     amount_paise: Mapped[int] = mapped_column(Integer)
     approved_amount_paise: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[Status] = mapped_column(Enum(Status, native_enum=False), default=Status.DRAFT)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    employee: Mapped[User] = relationship(lazy="joined")
+
+    @property
+    def employee_name(self) -> str:
+        return self.employee.name
 
 
 class ClaimEvent(Base):
@@ -72,3 +77,13 @@ class ClaimEvent(Base):
     approved_amount_paise: Mapped[int | None] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    actor: Mapped[User] = relationship(lazy="joined")
+
+    @property
+    def actor_name(self) -> str:
+        return self.actor.name
+
+    @property
+    def actor_role(self) -> Role:
+        return self.actor.role

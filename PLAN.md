@@ -54,7 +54,6 @@ Seed: 2 employees (Asha, Rohan), 2 approvers (Meera, Vikram). Two approvers make
 | amount_paise | int | > 0, ≤ 10,00,000 rupees (100,000,000 paise) |
 | approved_amount_paise | int, nullable | set on approval |
 | status | enum | DRAFT, SUBMITTED, APPROVED, REJECTED, PAID |
-| version | int | starts at 1, +1 on every change |
 | created_at, updated_at | datetime (UTC) | |
 
 **claim_events** (append-only, never updated or deleted):
@@ -81,11 +80,11 @@ Any pair not in this table → **409 Conflict**.
 - Approver: approve, reject, pay. An approver can never act on their own claim.
 - Employees see only their own claims. Approvers see all non-draft claims.
 
-**Concurrency and duplicates.** Every write sends the `version` the client last saw, and the service runs:
+**Concurrency and duplicates.** Every write is a conditional UPDATE that only succeeds if the status is still what the service just read:
 
 ```sql
-UPDATE claims SET status = :new, version = version + 1, ...
-WHERE id = :id AND status = :expected AND version = :version
+UPDATE claims SET status = :new, updated_at = ...
+WHERE id = :id AND status = :expected
 ```
 
 If 0 rows are updated → 409 with a clear message. The event row is written in the same transaction. This one rule handles double clicks, stale tabs, and two approvers acting at once.
@@ -100,14 +99,14 @@ All requests carry `X-User-Id`. Missing or unknown user → 401.
 | GET | /claims | both | `?status=` filter; employee gets own, approver gets non-draft |
 | POST | /claims | employee | title, category, description, expense_date, amount_paise |
 | GET | /claims/{id} | owner or approver | returns claim + events |
-| PATCH | /claims/{id} | owner | fields + version; REJECTED → DRAFT with a `reopened` event |
-| DELETE | /claims/{id} | owner | `?version=`; only DRAFT never submitted |
-| POST | /claims/{id}/submit | owner | version |
-| POST | /claims/{id}/approve | approver | version, approved_amount_paise (optional, defaults to full), comment |
-| POST | /claims/{id}/reject | approver | version, comment (required) |
-| POST | /claims/{id}/pay | approver | version |
+| PATCH | /claims/{id} | owner | fields; REJECTED → DRAFT with a `reopened` event |
+| DELETE | /claims/{id} | owner | only DRAFT never submitted |
+| POST | /claims/{id}/submit | owner | (none) |
+| POST | /claims/{id}/approve | approver | approved_amount_paise (optional, defaults to full), comment |
+| POST | /claims/{id}/reject | approver | comment (required) |
+| POST | /claims/{id}/pay | approver | (none) |
 
-**Errors:** 401 no user · 403 wrong role or not owner · 404 not found (also for other employees' claims, so they can't probe IDs) · 409 invalid transition or stale version · 422 validation.
+**Errors:** 401 no user · 403 wrong role or not owner · 404 not found (also for other employees' claims, so they can't probe IDs) · 409 invalid transition or status already changed · 422 validation.
 
 **Approval rules:** `0 < approved_amount_paise ≤ amount_paise`. If less than the full amount, a comment is required (the employee needs to know why).
 
@@ -141,8 +140,8 @@ All requests carry `X-User-Id`. Missing or unknown user → 401.
   - partial approval: ₹8,000 claimed, ₹6,500 approved, comment required
   - reject → edit (status back to DRAFT, `reopened` event) → resubmit → approve
   - invalid transitions: approve a draft, pay a rejected claim, edit a submitted claim → 409
-  - duplicate submit with the same version → second one 409
-  - two approvers, same version: approve and reject → exactly one succeeds
+  - duplicate submit → second one 409
+  - two approvers on the same claim: approve and reject → exactly one succeeds
   - validation: negative amount, future date, approved > claimed, reject without comment → 422
   - authorization: employee can't approve, can't see another employee's claim, approver can't approve own claim
 
@@ -186,7 +185,7 @@ All requests carry `X-User-Id`. Missing or unknown user → 401.
 | Decision | Instead of | Why |
 |---|---|---|
 | State machine as a lookup table | if/else in each endpoint | One place defines every legal move; invalid moves are rejected uniformly. |
-| Optimistic locking (`version`) | Row locks, or nothing | SQLite has no `SELECT FOR UPDATE`. A conditional UPDATE is atomic, and it covers duplicates, stale pages and concurrent approvers with one rule. |
+| Conditional UPDATE on `status` | Row locks, or nothing | SQLite has no `SELECT FOR UPDATE`. A conditional UPDATE is atomic, and it covers double clicks, stale pages and concurrent approvers with one rule. |
 | Integer paise | Float rupees | Floats can't represent money exactly. |
 | `claims` + `claim_events` | Only an events log (event sourcing) | Current state is a cheap read; history is still complete. Event sourcing is overkill for this size. |
 | Partial approval as `approved_amount_paise` | A separate PARTIALLY_APPROVED status | It's still approved; only the amount differs. Keeps the state machine small. |
@@ -201,4 +200,5 @@ All requests carry `X-User-Id`. Missing or unknown user → 401.
 - No receipt upload, no line items (one amount per claim).
 - Single currency (INR).
 - A claim can't be re-reviewed once approved (no "reopen approved").
+- Two edits to the same DRAFT in two tabs: last write wins (status doesn't change, so nothing is detected).
 - SQLite: fine for this, not for many concurrent writers.
