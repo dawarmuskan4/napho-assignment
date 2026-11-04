@@ -1,6 +1,6 @@
 # Reimbursement Management System
 
-**Video walkthrough: [ADD LINK HERE](ADD-LINK-HERE)**
+**Video walkthrough: https://drive.google.com/file/d/1r-eDi6M0bIShed1g7CdjUqqUXcgSmjWQ/view?usp=sharing **
 
 Beyond the brief, I added: real login with sessions (and per-tab logins), 57 tests including parallel-request tests for the concurrency handling, and a polished UI (dashboard, activity log, confirmation dialogs, dark mode).
 
