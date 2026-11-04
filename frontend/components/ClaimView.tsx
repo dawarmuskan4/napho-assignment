@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Banknote, Check, CircleAlert, Info, Pencil, Send, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Check, CircleAlert, CircleCheck, Info, Pencil, Send, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,6 +8,14 @@ import StatusBadge from "@/components/StatusBadge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +31,13 @@ import {
   type ClaimEvent,
 } from "@/lib/api";
 import { useRequireUser } from "@/lib/user";
+
+function amountSummary(c: ClaimDetail): string {
+  const approved = c.approved_amount_paise ?? c.amount_paise;
+  return approved < c.amount_paise
+    ? `${formatRupees(approved)} of ${formatRupees(c.amount_paise)}`
+    : formatRupees(approved);
+}
 
 function eventText(e: ClaimEvent): string {
   const who = `${e.actor_name} (${e.actor_role})`;
@@ -54,6 +69,8 @@ export default function ClaimView() {
   const inFlight = useRef(false); // state is too slow to block two clicks in the same tick
   const [approvedRupees, setApprovedRupees] = useState("");
   const [comment, setComment] = useState("");
+  const [confirmingReject, setConfirmingReject] = useState(false);
+  const [done, setDone] = useState<{ title: string; detail: string } | null>(null); // success screen before the redirect
 
   const load = useCallback(
     () =>
@@ -75,17 +92,23 @@ export default function ClaimView() {
     if (user) load();
   }, [user, load]);
 
+  useEffect(() => {
+    if (!done) return;
+    const timer = setTimeout(() => router.push("/"), 2000);
+    return () => clearTimeout(timer);
+  }, [done, router]);
+
   // Runs one action. Buttons stay disabled while it is in flight.
   // On 409/404 the claim changed under us: reload it so the buttons match reality. Then show the message.
   // Other errors (e.g. 422) keep what the user typed.
-  async function run(fn: () => Promise<ClaimDetail | void>, after?: () => void) {
+  async function run(fn: () => Promise<ClaimDetail | void>, after?: (result: ClaimDetail | void) => void) {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
       const result = await fn();
-      if (after) return after();
+      if (after) return after(result);
       if (result) {
         setClaim(result);
         setApprovedRupees(paiseToRupees(result.amount_paise));
@@ -107,12 +130,25 @@ export default function ClaimView() {
   function approve() {
     const paise = rupeesToPaise(approvedRupees);
     if (!(paise > 0)) return setError("Enter an approved amount greater than 0");
-    run(() => post("approve", { approved_amount_paise: paise, comment: comment.trim() || undefined }));
+    run(
+      () => post("approve", { approved_amount_paise: paise, comment: comment.trim() || undefined }),
+      (result) => result && setDone({ title: "Claim approved", detail: `${result.title}: ${amountSummary(result)}` }),
+    );
+  }
+
+  // The Reject button only asks for confirmation; the dialog's confirm button does the rejecting.
+  function askToReject() {
+    if (!comment.trim()) return setError("A comment is required to reject");
+    setError("");
+    setConfirmingReject(true);
   }
 
   function reject() {
-    if (!comment.trim()) return setError("A comment is required to reject");
-    run(() => post("reject", { comment: comment.trim() }));
+    setConfirmingReject(false);
+    run(
+      () => post("reject", { comment: comment.trim() }),
+      () => router.push("/"),
+    );
   }
 
   function remove() {
@@ -123,6 +159,23 @@ export default function ClaimView() {
     );
   }
 
+  if (done) {
+    return (
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">
+        <Card className="w-full max-w-sm text-center shadow-md">
+          <CardContent className="flex flex-col items-center gap-3">
+            <CircleCheck className="size-14 text-emerald-600 dark:text-emerald-400" />
+            <h1 className="text-xl font-bold">{done.title}</h1>
+            <p className="text-sm text-muted-foreground">{done.detail}</p>
+            <p className="text-xs text-muted-foreground">Taking you to the dashboard…</p>
+            <Button variant="outline" onClick={() => router.push("/")}>
+              Go to dashboard now
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   if (!user) return <p>Loading…</p>;
   if (!claim) return <p className="text-destructive">{error || "Loading…"}</p>;
 
@@ -208,7 +261,9 @@ export default function ClaimView() {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="approved-amount">Approved amount (₹), claimed {formatRupees(claim.amount_paise)}</Label>
+                  <Label htmlFor="approved-amount">
+                    Approved amount (₹), claimed {formatRupees(claim.amount_paise)}
+                  </Label>
                   <Input
                     id="approved-amount"
                     type="number"
@@ -220,19 +275,14 @@ export default function ClaimView() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="review-comment">Comment (required to reject or to approve less than claimed)</Label>
-                  <Textarea
-                    id="review-comment"
-                    rows={2}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                  />
+                  <Textarea id="review-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
                 </div>
                 <div className="flex gap-2">
                   <Button size="lg" disabled={busy} onClick={approve}>
                     <Check />
                     Approve
                   </Button>
-                  <Button size="lg" variant="destructive" disabled={busy} onClick={reject}>
+                  <Button size="lg" variant="destructive" disabled={busy} onClick={askToReject}>
                     <X />
                     Reject
                   </Button>
@@ -243,7 +293,18 @@ export default function ClaimView() {
 
           {canReview && claim.status === "APPROVED" && (
             <div>
-              <Button size="lg" disabled={busy} onClick={() => run(() => post("pay"))}>
+              <Button
+                size="lg"
+                disabled={busy}
+                onClick={() =>
+                  run(
+                    () => post("pay"),
+                    (result) =>
+                      result &&
+                      setDone({ title: "Marked as paid", detail: `${result.title}: ${amountSummary(result)}` }),
+                  )
+                }
+              >
                 <Banknote />
                 Mark paid
               </Button>
@@ -280,6 +341,27 @@ export default function ClaimView() {
           </Card>
         </aside>
       </div>
+
+      <Dialog open={confirmingReject} onOpenChange={setConfirmingReject}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject this claim?</DialogTitle>
+            <DialogDescription>
+              {claim.employee_name} will see your comment and can edit and resubmit the claim.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="rounded-md bg-muted p-3 text-sm italic">“{comment.trim()}”</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingReject(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={reject}>
+              <X />
+              Yes, reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
