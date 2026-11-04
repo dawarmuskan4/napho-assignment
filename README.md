@@ -23,7 +23,11 @@ Design diagrams: `reimbursement-system-design.drawio` (open at app.diagrams.net)
 docker compose up --build
 ```
 
-Then open http://localhost:3000 and log in with a demo account below. The backend is on http://localhost:8000. The first start seeds the 4 accounts. The database is a SQLite file on a Docker volume, so your data survives restarts. `docker compose down -v` deletes it. Everything is in one file, `docker-compose.yml`.
+Then open http://localhost:3000 and log in with a demo account below. The backend is on http://localhost:8000. The first start seeds the 4 accounts. Everything is in one file, `docker-compose.yml`. Ports 3000 and 8000 must be free, so stop any local dev servers first.
+
+- **Database:** SQLite, a single file on a Docker volume (`db-data`), so your data survives restarts. `docker compose down -v` deletes it. There are no database credentials, because SQLite has no database user or password and nothing connects to it over the network. The only passwords are the demo logins, stored hashed.
+- **API address:** the frontend image has `http://localhost:8000` built in (`NEXT_PUBLIC_API_URL` in the compose file). If you change the backend's port, change it there too and rebuild.
+- **Checked:** I built and ran this with Docker 29 and Compose 5. Login, creating a claim, and data surviving a backend restart all worked.
 
 **Without Docker:** you need Python 3.12 and Node 20+.
 
@@ -197,6 +201,7 @@ frontend/
 - A claim can't be re-reviewed once approved.
 - SQLite is fine for this size, not for many concurrent writers.
 - Frontend behavior was checked by hand in a browser. There are no frontend tests.
+- The Docker setup is for running the demo locally. It uses development-style settings: CORS only allows `http://localhost:3000`, and the demo password is public.
 
 ## AI usage
 
