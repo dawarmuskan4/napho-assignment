@@ -17,7 +17,15 @@ Design diagrams: `reimbursement-system-design.drawio` (open at app.diagrams.net)
 
 ## Run it
 
-You need Python 3.12 and Node 20+.
+**With Docker** (one command, nothing else to install):
+
+```bash
+docker compose up --build
+```
+
+Then open http://localhost:3000 and log in with a demo account below. The backend is on http://localhost:8000. The first start seeds the 4 accounts. The database is a SQLite file on a Docker volume, so your data survives restarts. `docker compose down -v` deletes it. Everything is in one file, `docker-compose.yml`.
+
+**Without Docker:** you need Python 3.12 and Node 20+.
 
 **Backend** (http://localhost:8000, API docs at http://localhost:8000/docs)
 
