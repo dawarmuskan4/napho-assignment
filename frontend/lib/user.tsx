@@ -1,41 +1,61 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, errorMessage, getStoredUserId, storeUserId, type User } from "@/lib/api";
+import { api, clearToken, getToken, setToken, type User } from "@/lib/api";
 
-type UserContextValue = {
-  users: User[];
+type AuthContextValue = {
   user: User | null;
-  selectUser: (id: number) => void;
-  error: string;
+  loading: boolean; // true until we know whether the stored token is still valid
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
-const UserContext = createContext<UserContextValue>({ users: [], user: null, selectUser: () => {}, error: "" });
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  loading: true,
+  login: async () => {},
+  logout: async () => {},
+});
 
-export const useUser = () => useContext(UserContext);
+export const useUser = () => useContext(AuthContext);
+
+// For pages that need a logged-in user: returns the user, or null while loading / redirecting to /login.
+export function useRequireUser(): User | null {
+  const { user, loading } = useUser();
+  const router = useRouter();
+  useEffect(() => {
+    if (!loading && !user) router.replace("/login");
+  }, [loading, user, router]);
+  return user;
+}
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<User[]>([]);
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<User[]>("/users")
-      .then((list) => {
-        const chosen = list.find((u) => String(u.id) === getStoredUserId()) ?? list[0];
-        if (chosen) storeUserId(chosen.id);
-        setUsers(list);
-        setUser(chosen ?? null);
-      })
-      .catch((e) => setError(errorMessage(e)));
+    (getToken() ? api<User>("/auth/me") : Promise.resolve(null))
+      .then(setUser)
+      .catch(() => clearToken())
+      .finally(() => setLoading(false));
   }, []);
 
-  function selectUser(id: number) {
-    const chosen = users.find((u) => u.id === id);
-    if (!chosen) return;
-    storeUserId(id); // before setUser, so pages that refetch send the new X-User-Id
-    setUser(chosen);
+  async function login(email: string, password: string) {
+    const result = await api<{ token: string; user: User }>("/auth/login", { method: "POST", body: { email, password } });
+    setToken(result.token);
+    setUser(result.user);
   }
 
-  return <UserContext.Provider value={{ users, user, selectUser, error }}>{children}</UserContext.Provider>;
+  async function logout() {
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {} // log out locally even if the server can't be reached
+    clearToken();
+    setUser(null);
+    router.push("/login");
+  }
+
+  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
 }

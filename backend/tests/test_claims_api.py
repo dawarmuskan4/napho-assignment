@@ -3,12 +3,21 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.models import Category, Claim, Status
-from tests.conftest import ASHA, MEERA, ROHAN, VIKRAM
+from tests.conftest import ASHA, DEMO_PASSWORD, EMAILS, MEERA, ROHAN, VIKRAM
+
+
+TOKENS = {}
+
+
+@pytest.fixture(autouse=True)
+def log_everyone_in(client):
+    for user_id, email in EMAILS.items():
+        r = client.post("/auth/login", json={"email": email, "password": DEMO_PASSWORD})
+        TOKENS[user_id] = r.json()["token"]
 
 
 def h(user_id):
-    return {"X-User-Id": str(user_id)}
+    return {"Authorization": f"Bearer {TOKENS[user_id]}"}
 
 
 def new_claim(client, user=ASHA, **overrides):
@@ -160,10 +169,11 @@ def test_reject_without_comment_is_422(client, body):
 # ---------- authorization ----------
 
 
-def test_missing_or_unknown_user_is_401(client):
+def test_missing_or_bad_token_is_401(client):
     assert client.get("/claims").status_code == 401
-    assert client.get("/claims", headers=h(999)).status_code == 401
-    assert client.get("/claims", headers={"X-User-Id": "abc"}).status_code == 401
+    assert client.get("/claims", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert client.get("/claims", headers={"Authorization": "Basic abc"}).status_code == 401
+    assert client.get("/claims", headers={"X-User-Id": "3"}).status_code == 401  # the old header no longer works
 
 
 def test_employee_cannot_approve_or_reject_or_pay(client):
@@ -172,11 +182,17 @@ def test_employee_cannot_approve_or_reject_or_pay(client):
         assert act(client, claim, action, ASHA, **extra).status_code == 403
 
 
-def test_approver_cannot_create_or_submit(client):
-    body = {"title": "t", "category": "food", "expense_date": date.today().isoformat(), "amount_paise": 100}
-    assert client.post("/claims", json=body, headers=h(MEERA)).status_code == 403
-    claim = new_claim(client)
-    assert act(client, claim, "submit", MEERA).status_code == 403
+def test_approver_can_create_and_submit_own_claim_but_not_approve_it(client):
+    claim = new_claim(client, user=MEERA)
+    assert act(client, claim, "submit", MEERA).status_code == 200
+    assert act(client, claim, "approve", MEERA).status_code == 403
+    assert act(client, claim, "reject", MEERA, comment="x").status_code == 403
+    assert act(client, claim, "approve", VIKRAM).status_code == 200  # the other approver can
+
+
+def test_approver_cannot_submit_someone_elses_claim(client):
+    claim = new_claim(client, user=ASHA)
+    assert act(client, claim, "submit", MEERA).status_code == 404
 
 
 def test_employee_cannot_see_or_touch_another_employees_claim(client):
@@ -188,35 +204,30 @@ def test_employee_cannot_see_or_touch_another_employees_claim(client):
     assert client.get("/claims", headers=h(ROHAN)).json() == []
 
 
-def test_approver_cannot_approve_own_claim(client, session_factory):
-    with session_factory() as db:  # approvers can't create claims via the API, so insert one directly
-        own = Claim(employee_id=MEERA, title="t", category=Category.food, expense_date=date.today(),
-                    amount_paise=100, status=Status.SUBMITTED)
-        db.add(own)
-        db.commit()
-        claim_id = own.id
-    r = client.post(f"/claims/{claim_id}/approve", json={}, headers=h(MEERA))
-    assert r.status_code == 403
-    assert client.post(f"/claims/{claim_id}/approve", json={}, headers=h(VIKRAM)).status_code == 200
-
-
 # ---------- listing + delete ----------
 
 
-def test_lists_employee_sees_own_approver_sees_non_draft(client):
+def test_lists_mine_and_review_scope(client):
     draft = new_claim(client, user=ASHA)
     sub = submitted_claim(client)
     new_claim(client, user=ROHAN)
+    own = new_claim(client, user=MEERA)  # an approver's own claim
+    own = act(client, own, "submit", MEERA).json()
 
     asha_ids = {c["id"] for c in client.get("/claims", headers=h(ASHA)).json()}
     assert asha_ids == {draft["id"], sub["id"]}
 
-    approver_ids = {c["id"] for c in client.get("/claims", headers=h(MEERA)).json()}
-    assert approver_ids == {sub["id"]}
+    meera_mine = {c["id"] for c in client.get("/claims", headers=h(MEERA)).json()}
+    assert meera_mine == {own["id"]}
+
+    review = {c["id"] for c in client.get("/claims?scope=review", headers=h(MEERA)).json()}
+    assert review == {sub["id"]}  # not drafts, not her own claim
     assert client.get(f"/claims/{draft['id']}", headers=h(MEERA)).status_code == 404
 
-    only = client.get("/claims?status=SUBMITTED", headers=h(MEERA)).json()
-    assert [c["id"] for c in only] == [sub["id"]]
+    only = client.get("/claims?scope=review&status=SUBMITTED", headers=h(VIKRAM)).json()
+    assert {c["id"] for c in only} == {sub["id"], own["id"]}
+
+    assert client.get("/claims?scope=review", headers=h(ASHA)).status_code == 403
 
 
 def test_delete_never_submitted_draft(client):
@@ -233,10 +244,6 @@ def test_cannot_delete_reopened_claim_or_submitted_claim(client):
     claim = client.patch(f"/claims/{claim['id']}", json={"title": "fixed"}, headers=h(ASHA)).json()
     assert claim["status"] == "DRAFT"  # back to draft, but it has review history
     assert client.delete(f"/claims/{claim['id']}", headers=h(ASHA)).status_code == 409
-
-
-def test_users_endpoint_needs_no_auth(client):
-    assert [u["name"] for u in client.get("/users").json()] == ["Asha", "Rohan", "Meera", "Vikram"]
 
 
 def test_response_has_names_and_utc_timestamps(client):

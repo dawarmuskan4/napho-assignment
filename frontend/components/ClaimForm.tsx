@@ -1,7 +1,15 @@
 "use client";
 
+import { CircleAlert, Save, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   api,
   CATEGORIES,
@@ -23,6 +31,7 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // state is too slow to block two clicks in the same tick
+  const submitAfterSave = useRef(true); // which of the two buttons was pressed
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +55,17 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
       const saved = claim
         ? await api<ClaimDetail>(`/claims/${claim.id}`, { method: "PATCH", body })
         : await api<ClaimDetail>("/claims", { method: "POST", body });
-      router.push(`/claims/${saved.id}`);
+      if (submitAfterSave.current) {
+        try {
+          await api(`/claims/${saved.id}/submit`, { method: "POST", body: {} });
+        } catch {
+          router.push(`/claims/${saved.id}`); // saved as a draft; the claim page shows its real state
+          return;
+        }
+        router.push("/");
+      } else {
+        router.push(claim ? `/claims/${saved.id}` : "/");
+      }
     } catch (err) {
       setError(errorMessage(err));
       inFlight.current = false;
@@ -54,72 +73,105 @@ export default function ClaimForm({ claim }: { claim?: ClaimDetail }) {
     }
   }
 
-  const input = "w-full rounded border border-gray-400 bg-transparent px-2 py-1.5";
-
   return (
-    <form onSubmit={save} className="flex max-w-lg flex-col gap-4">
-      <h1 className="text-xl font-bold">{claim ? "Edit claim" : "New claim"}</h1>
-      {claim?.status === "REJECTED" && (
-        <p className="rounded bg-yellow-100 p-2 text-sm text-yellow-900">
-          Saving moves this claim back to DRAFT. You can then submit it again.
-        </p>
-      )}
-      <label className="text-sm">
-        Title
-        <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
-      </label>
-      <label className="text-sm">
-        Category
-        <select className={input} value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm">
-        Description (optional)
-        <textarea
-          className={input}
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={1000}
-        />
-      </label>
-      <label className="text-sm">
-        Expense date
-        <input
-          type="date"
-          className={input}
-          value={expenseDate}
-          max={new Date().toLocaleDateString("en-CA")}
-          onChange={(e) => setExpenseDate(e.target.value)}
-          required
-        />
-      </label>
-      <label className="text-sm">
-        Amount (₹)
-        <input
-          type="number"
-          className={input}
-          value={amount}
-          min="0.01"
-          step="0.01"
-          onChange={(e) => setAmount(e.target.value)}
-          required
-        />
-      </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button disabled={busy} className="rounded bg-blue-600 px-4 py-1.5 text-white disabled:opacity-50">
-          {busy ? "Saving…" : "Save"}
-        </button>
-        <button type="button" onClick={() => router.back()} className="rounded border border-gray-400 px-4 py-1.5">
-          Cancel
-        </button>
-      </div>
-    </form>
+    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">
+      <Card className="w-full max-w-lg shadow-md">
+        <CardHeader>
+          <CardTitle className="text-xl">{claim ? "Edit claim" : "New claim"}</CardTitle>
+          <CardDescription>
+            {claim ? "Update the details, then save or submit." : "Fill in the details, then submit or save a draft."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={save} className="flex flex-col gap-4">
+            {claim?.status === "REJECTED" && (
+              <Alert>
+                <CircleAlert />
+                <AlertDescription>Saving moves this claim back to DRAFT. You can then submit it again.</AlertDescription>
+              </Alert>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="title">Title</Label>
+              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="category">Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
+                <SelectTrigger id="category" className="w-full capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c} className="capitalize">
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="description">Description (optional)</Label>
+              <Textarea
+                id="description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={1000}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="expense-date">Expense date</Label>
+                <Input
+                  id="expense-date"
+                  type="date"
+                  value={expenseDate}
+                  max={new Date().toLocaleDateString("en-CA")}
+                  onChange={(e) => setExpenseDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="amount">Amount (₹)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={amount}
+                  min="0.01"
+                  step="0.01"
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            {error && (
+              <Alert variant="destructive">
+                <CircleAlert />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" size="lg" disabled={busy} onClick={() => (submitAfterSave.current = true)}>
+                <Send />
+                {busy ? "Saving…" : claim ? "Save & submit" : "Submit claim"}
+              </Button>
+              <Button
+                type="submit"
+                size="lg"
+                variant="outline"
+                disabled={busy}
+                onClick={() => (submitAfterSave.current = false)}
+              >
+                <Save />
+                {claim ? "Save" : "Save as draft"}
+              </Button>
+              <Button type="button" size="lg" variant="ghost" onClick={() => router.back()}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -5,7 +5,7 @@ export type Status = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID";
 export const CATEGORIES = ["travel", "food", "lodging", "supplies", "other"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-export type User = { id: number; name: string; role: Role };
+export type User = { id: number; name: string; email: string; role: Role };
 
 export type ClaimEvent = {
   id: number;
@@ -38,25 +38,29 @@ export type Claim = {
 
 export type ClaimDetail = Claim & { events: ClaimEvent[] };
 
-// ---- selected user (mock auth) ----
-// The acting user lives in memory, per tab, so two tabs can act as two different people.
-// localStorage only remembers the last choice so a new tab or a reload starts as that user.
+// ---- login session ----
+// The token lives in sessionStorage: it survives a reload but is private to this tab,
+// so two tabs can be logged in as two different people.
 
-const USER_KEY = "userId";
-let currentUserId: string | null = null;
+const TOKEN_KEY = "token";
 
-export function getStoredUserId(): string | null {
+export function getToken(): string | null {
   try {
-    return localStorage.getItem(USER_KEY);
+    return sessionStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
-export function storeUserId(id: number) {
-  currentUserId = String(id);
+export function setToken(token: string) {
   try {
-    localStorage.setItem(USER_KEY, String(id));
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {}
+}
+
+export function clearToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
   } catch {}
 }
 
@@ -87,7 +91,8 @@ export function errorMessage(e: unknown): string {
 
 export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (currentUserId) headers["X-User-Id"] = currentUserId;
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
   let res: Response;
@@ -101,6 +106,11 @@ export async function api<T = void>(path: string, options: { method?: string; bo
     throw new ApiError(0, `Cannot reach the server at ${API_URL}. Is the backend running?`);
   }
 
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    clearToken(); // session expired or invalid
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload on purpose: drops all stale state
+    window.location.href = "/login";
+  }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, readableDetail(data?.detail));

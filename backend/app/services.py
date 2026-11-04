@@ -41,8 +41,6 @@ def _load(db: Session, claim_id: int) -> Claim:
 
 
 def _load_owned(db: Session, user: User, claim_id: int) -> Claim:
-    if user.role != Role.employee:
-        raise Forbidden("Only employees can do this")
     claim = _load(db, claim_id)
     if claim.employee_id != user.id:
         raise NotFound("Claim not found")  # 404, not 403: don't reveal other people's IDs
@@ -85,12 +83,15 @@ def _apply(db: Session, claim: Claim, actor: User, action: str, new_status: Stat
 # ---------- reads ----------
 
 
-def list_claims(db: Session, user: User, status: Status | None) -> list[Claim]:
+def list_claims(db: Session, user: User, status: Status | None, scope: str = "mine") -> list[Claim]:
+    """scope "mine": my own claims. scope "review" (approvers): other people's claims that are past DRAFT."""
     query = select(Claim).order_by(Claim.id.desc())
-    if user.role == Role.employee:
-        query = query.where(Claim.employee_id == user.id)
+    if scope == "review":
+        if user.role != Role.approver:
+            raise Forbidden("Only approvers can do this")
+        query = query.where(Claim.employee_id != user.id, Claim.status != Status.DRAFT)
     else:
-        query = query.where(Claim.status != Status.DRAFT)
+        query = query.where(Claim.employee_id == user.id)
     if status is not None:
         query = query.where(Claim.status == status)
     return list(db.scalars(query))
@@ -98,9 +99,9 @@ def list_claims(db: Session, user: User, status: Status | None) -> list[Claim]:
 
 def get_claim(db: Session, user: User, claim_id: int) -> Claim:
     claim = _load(db, claim_id)
-    if user.role == Role.employee and claim.employee_id != user.id:
-        raise NotFound("Claim not found")
-    if user.role == Role.approver and claim.status == Status.DRAFT:
+    if claim.employee_id == user.id:
+        return claim
+    if user.role == Role.employee or claim.status == Status.DRAFT:  # approvers can't see other people's drafts
         raise NotFound("Claim not found")
     return claim
 
@@ -113,8 +114,6 @@ def get_events(db: Session, claim_id: int) -> list[ClaimEvent]:
 
 
 def create_claim(db: Session, user: User, data: dict) -> Claim:
-    if user.role != Role.employee:
-        raise Forbidden("Only employees can do this")
     claim = Claim(employee_id=user.id, status=Status.DRAFT, **data)
     db.add(claim)
     db.flush()

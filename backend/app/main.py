@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db import create_tables
-from app.routers import claims
+from app.routers import auth, claims
 from app.services import ServiceError
 from app.state_machine import InvalidTransition
 
@@ -25,6 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(claims.router)
 
 

@@ -1,5 +1,6 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import schemas, services
@@ -17,14 +18,10 @@ def _detail(db: Session, claim: Claim) -> schemas.ClaimDetail:
     )
 
 
-@router.get("/users", response_model=list[schemas.UserOut])
-def list_users(db: Session = Depends(get_db)):
-    return db.scalars(select(User).order_by(User.id)).all()
-
-
 @router.get("/claims", response_model=list[schemas.ClaimOut])
-def list_claims(status: Status | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return services.list_claims(db, user, status)
+def list_claims(status: Status | None = None, scope: Literal["mine", "review"] = "mine",
+                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return services.list_claims(db, user, status, scope)
 
 
 @router.post("/claims", response_model=schemas.ClaimDetail, status_code=201)

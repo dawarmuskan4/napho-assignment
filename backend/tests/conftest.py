@@ -3,12 +3,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app import auth
 from app.db import create_tables, get_db
 from app.main import app
-from app.seed import seed
+from app.seed import DEMO_PASSWORD, seed  # noqa: F401  (tests import DEMO_PASSWORD from here)
 
 # seed order: ids 1-4
 ASHA, ROHAN, MEERA, VIKRAM = 1, 2, 3, 4
+EMAILS = {ASHA: "asha@example.com", ROHAN: "rohan@example.com", MEERA: "meera@example.com", VIKRAM: "vikram@example.com"}
+
+
+@pytest.fixture(autouse=True)
+def fast_password_hashing(monkeypatch):
+    monkeypatch.setattr(auth, "SCRYPT_N", 2**4)  # real value is slow on purpose; tests don't need that
 
 
 @pytest.fixture
