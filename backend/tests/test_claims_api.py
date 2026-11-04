@@ -91,6 +91,17 @@ def test_reject_edit_resubmit_approve(client):
     assert actions(claim) == ["created", "submitted", "rejected", "reopened", "submitted", "approved"]
 
 
+@pytest.mark.parametrize("body", [{}, {"title": None}])
+def test_empty_patch_is_422_and_changes_nothing(client, body):
+    claim = submitted_claim(client)
+    claim = act(client, claim, "reject", MEERA, comment="No").json()  # REJECTED
+    r = client.patch(f"/claims/{claim['id']}", json=body, headers=h(ASHA))
+    assert r.status_code == 422
+    after = client.get(f"/claims/{claim['id']}", headers=h(ASHA)).json()
+    assert after["status"] == "REJECTED"  # not silently reopened
+    assert len(after["events"]) == len(claim["events"])
+
+
 def test_edit_draft_logs_updated_event(client):
     claim = new_claim(client)
     r = client.patch(f"/claims/{claim['id']}", json={"title": "New title"}, headers=h(ASHA))
@@ -102,9 +113,10 @@ def test_edit_draft_logs_updated_event(client):
 # ---------- invalid transitions + concurrency ----------
 
 
-def test_approve_a_draft_is_409(client):
-    claim = new_claim(client)
-    assert act(client, claim, "approve", MEERA).status_code == 409
+def test_approver_cannot_act_on_someone_elses_draft_it_looks_missing(client):
+    claim = new_claim(client)  # Asha's draft
+    for action, extra in [("approve", {}), ("reject", {"comment": "x"}), ("pay", {})]:
+        assert act(client, claim, action, MEERA, **extra).status_code == 404
 
 
 def test_pay_a_rejected_claim_is_409(client):

@@ -1,5 +1,9 @@
 # Reimbursement Management System
 
+**Video walkthrough: [ADD LINK HERE](ADD-LINK-HERE)**
+
+Beyond the brief, I added: real login with sessions (and per-tab logins), 57 tests including parallel-request tests for the concurrency handling, and a polished UI (dashboard, activity log, confirmation dialogs, dark mode).
+
 Employees submit expense claims. Approvers approve (in full or in part) or reject them, then mark them paid. Every change is recorded in a history. Users log in with an email and a password.
 
 Flow: **create claim → submit → review → approve (full or partial) / reject → pay → view outcome**
@@ -8,6 +12,8 @@ Flow: **create claim → submit → review → approve (full or partial) / rejec
 - **Frontend:** Next.js (App Router, TypeScript, Tailwind), plain `fetch`, no state library
 
 Design diagrams: `reimbursement-system-design.drawio` (open at app.diagrams.net). The build plan is in `PLAN.md`.
+
+`PLAN.md` and the diagrams are the original plan. The build differs in two places: real login with sessions instead of a mocked user header, and conditional updates on status instead of a version column.
 
 ## Run it
 
@@ -42,7 +48,7 @@ source venv/bin/activate
 pytest
 ```
 
-Each test gets its own temporary SQLite file. 55 tests cover login and sessions, the state machine, the full API, authorization, validation and parallel requests.
+Each test gets its own temporary SQLite file. 57 tests cover login and sessions, the state machine, the full API, authorization, validation and parallel requests.
 
 ## Demo accounts
 
@@ -86,6 +92,7 @@ Editing a rejected claim moves it back to DRAFT (a `reopened` event is logged), 
 - Amount: greater than 0, at most ₹10,00,000.
 - Approval: `0 < approved amount ≤ claimed amount`. A comment is required when approving less than claimed.
 - Reject: comment required.
+- `PATCH` needs at least one field to change. An empty body gets 422.
 
 **Errors**
 
@@ -93,7 +100,7 @@ Editing a rejected claim moves it back to DRAFT (a `reopened` event is logged), 
 |---|---|
 | 401 | not logged in, session expired, or a wrong email or password |
 | 403 | not an approver, or an approver reviewing their own claim |
-| 404 | not found, also used for other employees' claims so IDs can't be probed |
+| 404 | not found. Also used for other employees' claims, and for other people's drafts when an approver asks, so IDs can't be probed |
 | 409 | invalid transition, or the claim's status changed under you |
 | 422 | validation error |
 
@@ -168,7 +175,6 @@ frontend/
 - "Pay" only records that payment was made. No money moves.
 - Any approver except the claim's owner can approve and pay. The same approver can do both.
 - Approvers see other people's claims only once they are submitted.
-- When an approver acts on a draft by ID, they get 409 (invalid move), not 404.
 
 ## Known limitations
 
@@ -177,7 +183,6 @@ frontend/
 - **Two edits to the same draft** in two tabs: the last save wins. The status doesn't change on an edit, so nothing detects it.
 - **Duplicate creates:** the UI blocks double clicks, but an API client retrying `POST /claims` creates two drafts. An idempotency key would fix this.
 - **Edit history is coarse:** an `updated` event doesn't say which field changed.
-- **An empty `PATCH {}`** succeeds, logs an `updated` event, and moves a REJECTED claim back to DRAFT with nothing changed.
 - **No separation of duties:** the approver who approved a claim can also pay it.
 - **Deleting a never-submitted draft** also deletes its `created` and `updated` events. It is the only case where history rows are removed.
 - No receipt upload and no line items.
@@ -187,6 +192,6 @@ frontend/
 
 ## AI usage
 
-I wrote the plan (`PLAN.md`) and the design diagrams. I used **Claude Code** to build the project one phase at a time (scaffold, data model, API, frontend, edge-case pass). I reviewed and committed each phase myself. Claude Code also wrote and ran the tests, and drove the browser to check the frontend flows.
+I worked out the design with Claude (claude.ai): I made the key decisions (partial approval in scope, one amount per claim, rejected claims reopen as drafts), and Claude drafted `PLAN.md` and the diagrams from them. I then built it with Claude Code one phase at a time, reviewing and committing each phase myself. Claude Code wrote and ran the tests and drove the browser to check the frontend. I changed the plan during the build (real login instead of a user switcher; status-based locking instead of a version column).
 
 Bugs found by the edge-case pass, such as two tabs sharing one user and a same-tick double click, are described in the phase 4 commit.

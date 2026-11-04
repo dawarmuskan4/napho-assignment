@@ -53,6 +53,8 @@ def _load_for_review(db: Session, user: User, claim_id: int) -> Claim:
     claim = _load(db, claim_id)
     if claim.employee_id == user.id:
         raise Forbidden("You cannot review your own claim")
+    if claim.status == Status.DRAFT:
+        raise NotFound("Claim not found")  # other people's drafts don't exist as far as an approver can tell
     return claim
 
 
@@ -127,6 +129,8 @@ def create_claim(db: Session, user: User, data: dict) -> Claim:
 
 def update_claim(db: Session, user: User, claim_id: int, changes: dict) -> Claim:
     claim = _load_owned(db, user, claim_id)
+    if not changes:
+        raise Invalid("Nothing to update: send at least one field")
     if claim.status == Status.REJECTED:
         # editing a rejected claim sends it back to DRAFT
         return _apply(db, claim, user, "reopened", Status(next_status("REJECTED", "reopen")), changes)
