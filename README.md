@@ -203,3 +203,8 @@ frontend/
 - Frontend behavior was checked by hand in a browser. There are no frontend tests.
 - The Docker setup is for running the demo locally. It uses development-style settings: CORS only allows `http://localhost:3000`, and the demo password is public.
 
+## AI usage
+
+I worked out the design with Claude (claude.ai): I made the key decisions (partial approval in scope, one amount per claim, rejected claims reopen as drafts), and Claude drafted `PLAN.md` and the diagrams from them. I then built it with Claude Code one phase at a time, reviewing and committing each phase myself. Claude Code wrote and ran the tests and drove the browser to check the frontend. I changed the plan during the build (real login instead of a user switcher; status-based locking instead of a version column).
+
+Bugs found by the edge-case pass, such as two tabs sharing one user and a same-tick double click, are described in the phase 4 commit.
